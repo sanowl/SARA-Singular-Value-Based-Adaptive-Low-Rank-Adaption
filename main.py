@@ -13,13 +13,13 @@ class SARA(nn.Module):
         cumulative = torch.cumsum(S, dim=0)
         self.k = torch.sum(cumulative < threshold * total).item()
         
-        self.U_k = nn.Parameter(torch.randn(pretrained_weight.shape[0], self.k))
-        self.V_k = nn.Parameter(torch.randn(self.k, pretrained_weight.shape[1]))
+        self.U_k = nn.Parameter(U[:, :self.k])
+        self.V_k = nn.Parameter(V[:, :self.k])
         self.lambda_k = nn.Parameter(torch.randn(self.k))
         
     def forward(self, x):
-        delta_W = self.U_k @ torch.diag(self.lambda_k) @ self.V_k
-        return F.linear(x, self.original_weight + delta_W)
+        delta_W = self.U_k @ torch.diag(self.lambda_k) @ self.V_k.t()
+        return x @ (self.original_weight + delta_W)
 
 class MoSARA(nn.Module):
     def __init__(self, pretrained_weight, threshold=0.5, num_experts=5):
@@ -34,22 +34,24 @@ class MoSARA(nn.Module):
         self.k = torch.sum(cumulative < threshold * total).item()
         
         self.U_k = nn.Parameter(U[:, :self.k], requires_grad=False)
-        self.V_k = nn.Parameter(V[:self.k, :], requires_grad=False)
+        self.V_k = nn.Parameter(V[:, :self.k], requires_grad=False)
         self.lambda_k = nn.Parameter(torch.randn(num_experts, self.k))
-        self.v = nn.Parameter(torch.zeros(pretrained_weight.shape[0]))
+        self.v = nn.Parameter(torch.zeros(pretrained_weight.shape[1]))
         
-        self.router_W1 = nn.Parameter(torch.randn(self.k, 1))
-        self.router_W2 = nn.Parameter(torch.randn(1, num_experts))
+        self.W_g1 = nn.Parameter(torch.randn(self.k, 1))
+        self.W_g2 = nn.Parameter(torch.randn(1, num_experts))
         
     def forward(self, x):
         # Compute routing weights
         routing_input = x @ self.U_k
-        g = F.softmax(routing_input @ self.router_W1 @ self.router_W2, dim=-1)
+        g = F.softmax(routing_input @ self.W_g1 @ self.W_g2, dim=-1)
         
         # Compute weighted sum of expert outputs
-        delta_W = self.U_k @ torch.diag_embed(self.lambda_k) @ self.V_k
-        expert_outputs = F.linear(x.unsqueeze(1), self.original_weight + delta_W)
-        output = torch.sum(expert_outputs * g.unsqueeze(-1), dim=1)
+        output = torch.zeros_like(x)
+        for i in range(self.num_experts):
+            delta_W = self.U_k @ torch.diag(self.lambda_k[i]) @ self.V_k.t()
+            expert_output = x @ (self.original_weight + delta_W)
+            output += g[:, i].unsqueeze(1) * expert_output
         
         # Apply diagonal scaling
         output = output * (1 + self.v)
