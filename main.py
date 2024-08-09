@@ -102,5 +102,5 @@ if __name__ == "__main__":
     sara_params = sum(p.numel() for p in sara_model.parameters() if p.requires_grad)
     mo_sara_params = sum(p.numel() for p in mo_sara_model.parameters() if p.requires_grad)
     print(f"\nNumber of trainable parameters in SARA: {sara_params}")
-    print(("test"))
+    print(("test    "))
     print(f"Number of trainable parameters in Mo-SARA: {mo_sara_params}")
