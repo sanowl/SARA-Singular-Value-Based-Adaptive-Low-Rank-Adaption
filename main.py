@@ -68,7 +68,7 @@ class SARALlamaModel(nn.Module):
                     if use_mo_sara:
                         setattr(module, 'weight', MoSARA(module.weight, threshold, num_experts))
                     else:
-                        setattr(module, 'weight', SARA(module.weight, threshold))
+                        setattr(modulje, 'weight', SARA(module.weight, threshold))
     
     def forward(self, input_ids, attention_mask=None):
         return self.base_model(input_ids, attention_mask=attention_mask)
